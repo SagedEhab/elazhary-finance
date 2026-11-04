@@ -33,6 +33,18 @@
     return Number.isSafeInteger(cents) ? cents : null;
   }
 
+  // Tidies a money field while it's being typed: adds commas, and drops
+  // anything that isn't a digit or a first decimal point.
+  function groupTypedMoney(text) {
+    const clean = normalizeDigits(text).replace(/[^\d.]/g, '');
+    const dot = clean.indexOf('.');
+    const rawWhole = dot === -1 ? clean : clean.slice(0, dot);
+    const whole = rawWhole.replace(/^0+(?=\d)/, '').replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    if (dot === -1) return whole;
+    const fraction = clean.slice(dot + 1).replace(/\./g, '').slice(0, 2);
+    return `${whole || '0'}.${fraction}`;
+  }
+
   function parseRate(text) {
     const clean = normalizeDigits(text).replace(/[%٪\s]/g, '');
     if (!/^\d+(\.\d{1,3})?$/.test(clean)) return null;
@@ -294,6 +306,7 @@
     FREQUENCIES,
     normalizeDigits,
     parseMoney,
+    groupTypedMoney,
     parseRate,
     formatMoney,
     formatRate,

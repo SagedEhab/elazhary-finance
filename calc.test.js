@@ -32,6 +32,30 @@ test('parses money exactly, including Arabic digits', () => {
   assert.equal(Calc.parseMoney(''), null);
 });
 
+test('adds commas to money while it is typed', () => {
+  assert.equal(Calc.groupTypedMoney('1000'), '1,000');
+  assert.equal(Calc.groupTypedMoney('1000000'), '1,000,000');
+  assert.equal(Calc.groupTypedMoney('999'), '999');
+  assert.equal(Calc.groupTypedMoney('1,0000'), '10,000');
+  assert.equal(Calc.groupTypedMoney('١٠٠٠٠٠'), '100,000');
+  assert.equal(Calc.groupTypedMoney(''), '');
+});
+
+test('keeps decimals sensible while typing', () => {
+  assert.equal(Calc.groupTypedMoney('1000.'), '1,000.');
+  assert.equal(Calc.groupTypedMoney('1000.5'), '1,000.5');
+  assert.equal(Calc.groupTypedMoney('1000.567'), '1,000.56');
+  assert.equal(Calc.groupTypedMoney('1.2.3'), '1.23');
+  assert.equal(Calc.groupTypedMoney('.5'), '0.5');
+  assert.equal(Calc.groupTypedMoney('007'), '7');
+  assert.equal(Calc.groupTypedMoney('0.5'), '0.5');
+  assert.equal(Calc.groupTypedMoney('12a34'), '1,234');
+});
+
+test('typed money always parses back to the exact amount', () => {
+  assert.equal(Calc.parseMoney(Calc.groupTypedMoney('1234567.89')), 123456789);
+});
+
 test('parses and formats rates', () => {
   assert.equal(Calc.parseRate('27.25'), 27250);
   assert.equal(Calc.parseRate('٢٧٫٢٥٪'), 27250);

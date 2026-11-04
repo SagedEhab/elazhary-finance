@@ -597,6 +597,27 @@
     return `<input id="${id}" dir="ltr" class="num" inputmode="decimal" autocomplete="off" value="${esc(value)}" placeholder="${esc(placeholder || '')}">`;
   }
 
+  function moneyInput(id, value, placeholder) {
+    return numberInput(id, value, placeholder).replace('<input ', '<input data-money ');
+  }
+
+  // Re-adds the commas after each keystroke and keeps the cursor beside the
+  // same digit, so editing the middle of a number works normally.
+  function formatMoneyField(input) {
+    const caret = input.selectionStart;
+    const before = Calc.normalizeDigits(input.value.slice(0, caret)).replace(/[^\d.]/g, '').length;
+    const formatted = Calc.groupTypedMoney(input.value);
+    if (formatted === input.value) return;
+    input.value = formatted;
+    let position = 0;
+    let seen = 0;
+    while (position < formatted.length && seen < before) {
+      if (formatted[position] !== ',') seen++;
+      position++;
+    }
+    input.setSelectionRange(position, position);
+  }
+
   function optional(label) {
     return `${label} <em>${t('optional')}</em>`;
   }
@@ -709,7 +730,7 @@
         ${dialogHead(cert ? t('certFormEdit') : t('certFormAdd'), bankName(bank))}
         ${field('cert-name', optional(t('certName')), `<input id="cert-name" autocomplete="off" maxlength="60" value="${esc(cert ? cert.name : '')}" placeholder="${t('certNameHint')}">`)}
         <div class="field-row">
-          ${field('cert-amount', t('amount'), numberInput('cert-amount', cert ? Calc.formatMoney(cert.amountCents) : '', '100,000'))}
+          ${field('cert-amount', t('amount'), moneyInput('cert-amount', cert ? Calc.formatMoney(cert.amountCents) : '', '100,000'))}
           ${field('cert-rate', t('rate'), numberInput('cert-rate', cert ? Calc.formatRate(cert.rateMilli).replace('%', '') : '', '27.25'))}
         </div>
         <div class="field-row">
@@ -719,7 +740,7 @@
         <div id="cert-start-wrap" ${freq === 'daily' ? '' : 'hidden'}>
           ${field('cert-start', t('startDate'), `<input id="cert-start" type="date" value="${cert && cert.startDate ? cert.startDate : todayIso()}">`)}
         </div>
-        ${field('cert-payout', t('generates'), numberInput('cert-payout', ''), '')}
+        ${field('cert-payout', t('generates'), moneyInput('cert-payout', ''), '')}
         <p class="error" id="form-error" role="alert"></p>
         <div class="dialog-actions">
           <button type="button" class="btn btn-quiet" data-action="close-dialog">${t('cancel')}</button>
@@ -798,7 +819,7 @@
         ${dialogHead(loan ? t('loanFormEdit') : t('loanFormAdd'), bankName(bank))}
         ${field('loan-name', optional(t('loanName')), `<input id="loan-name" autocomplete="off" maxlength="60" value="${esc(loan ? loan.name : '')}" placeholder="${t('loanNameHint')}">`)}
         <div class="field-row">
-          ${field('loan-balance', t('owedNow'), numberInput('loan-balance', current ? Calc.formatMoney(current.balance) : '', '50,000'))}
+          ${field('loan-balance', t('owedNow'), moneyInput('loan-balance', current ? Calc.formatMoney(current.balance) : '', '50,000'))}
           ${field('loan-rate', t('loanRate'), numberInput('loan-rate', loan ? Calc.formatRate(loan.rateMilli).replace('%', '') : '', '29.25'))}
         </div>
         ${field('loan-type', t('howRepay'), `<select id="loan-type">${options}</select>`)}
@@ -806,7 +827,7 @@
           ${field('loan-next', t('nextPaymentDate'), `<input id="loan-next" type="date" value="${nextDate}">`)}
           ${field('loan-end', optional(t('endDate')), `<input id="loan-end" type="date" value="${loan && loan.endDate ? loan.endDate : ''}">`)}
         </div>
-        ${field('loan-payment', t('payment'), numberInput('loan-payment', ''), '')}
+        ${field('loan-payment', t('payment'), moneyInput('loan-payment', ''), '')}
         <p class="error" id="form-error" role="alert"></p>
         <div class="dialog-actions">
           <button type="button" class="btn btn-quiet" data-action="close-dialog">${t('cancel')}</button>
@@ -1014,6 +1035,7 @@
 
   dialog.addEventListener('input', (event) => {
     const id = event.target.id;
+    if (event.target.hasAttribute('data-money')) formatMoneyField(event.target);
     if (id === 'bank-search') renderPicker(event.target.value);
     if (id === 'cert-payout') dialogContext.manual = event.target.value.trim() !== '';
     if (id === 'loan-payment') dialogContext.manual = event.target.value.trim() !== '';
