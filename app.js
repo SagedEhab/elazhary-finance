@@ -30,6 +30,8 @@
   let state = loadData();
   let dialogContext = null;
   let toastTimer = null;
+  let syncApi = null;
+  let syncStatus = window.FIREBASE_CONFIG ? { state: 'starting' } : null;
 
   // ---------- Storage ----------
 
@@ -53,12 +55,17 @@
     return { version: 2, banks: [] };
   }
 
-  function save() {
+  function storeLocally() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(state));
     } catch (err) {
       showToast(t('saveFailed'));
     }
+  }
+
+  function save() {
+    storeLocally();
+    if (syncApi) syncApi.changed();
   }
 
   function isValidCert(c) {
@@ -207,6 +214,11 @@
   function render() {
     document.documentElement.lang = lang;
     document.documentElement.dir = t('dir');
+    if (syncStatus && ['starting', 'signedOut', 'denied'].includes(syncStatus.state)) {
+      app.innerHTML = renderSignIn();
+      document.title = 'ELAZHARY FINANCE';
+      return;
+    }
     const bank = currentBankId() ? findBank(currentBankId()) : null;
     app.innerHTML = bank ? renderBankScreen(bank) : renderHome();
     document.title = bank
@@ -224,8 +236,42 @@
             <span class="brand-sub">${t('brandSub')}</span>
           </div>
         </div>
-        <button type="button" class="lang" data-action="toggle-lang" lang="${lang === 'en' ? 'ar' : 'en'}">${t('otherLang')}</button>
+        <div class="topbar-end">
+          <span id="sync-status" class="sync" role="status">${renderSyncBadge()}</span>
+          <button type="button" class="lang" data-action="toggle-lang" lang="${lang === 'en' ? 'ar' : 'en'}">${t('otherLang')}</button>
+        </div>
       </header>`;
+  }
+
+  function renderSyncBadge() {
+    if (!syncStatus) return '';
+    const labels = { synced: 'syncSynced', saving: 'syncSaving', offline: 'syncOffline' };
+    const key = labels[syncStatus.state];
+    if (!key) return '';
+    return `<span class="sync-dot sync-${syncStatus.state}" aria-hidden="true"></span>${t(key)}`;
+  }
+
+  function renderSignIn() {
+    const { state: status } = syncStatus;
+    const message = status === 'denied' ? `<p class="error sign-in-error" role="alert">${t('signInDenied')}</p>` : '';
+    const button = status === 'starting'
+      ? `<p class="sign-in-loading">${t('loading')}</p>`
+      : `<button type="button" class="btn btn-gold" data-action="sign-in">${t('signInButton')}</button>`;
+    return `
+      <div class="screen sign-in">
+        <div class="hero-wrap">
+          ${renderTopbar()}
+          <section class="hero hero-home hero-welcome">
+            ${archWatermark()}
+            <div class="hero-inner">
+              <h1>${t('signInTitle')}</h1>
+              <p>${t('signInText')}</p>
+              ${message}
+              ${button}
+            </div>
+          </section>
+        </div>
+      </div>`;
   }
 
   function renderHome() {
@@ -333,12 +379,22 @@
   }
 
   function renderBackup() {
+    const shared = Boolean(syncStatus);
+    const account = shared && syncStatus.userName
+      ? `<p class="backup-account">${t('signedInAs', { name: `<bdi>${esc(syncStatus.userName)}</bdi>` })}</p>` : '';
+    const editor = shared && syncStatus.updatedBy
+      ? `<p class="backup-account">${t('lastUpdatedBy', { name: `<bdi>${esc(syncStatus.updatedBy)}</bdi>` })}</p>` : '';
+    const signOut = shared
+      ? `<button type="button" class="btn btn-quiet" data-action="sign-out">${t('signOut')}</button>` : '';
     return `
       <footer class="backup">
-        <p>${t('backupNote')}</p>
+        <p>${t(shared ? 'backupNoteShared' : 'backupNote')}</p>
+        ${account}
+        ${editor}
         <div class="backup-actions">
           <button type="button" class="btn btn-quiet" data-action="export">${icon('download')}${t('saveBackup')}</button>
           <button type="button" class="btn btn-quiet" data-action="import">${icon('upload')}${t('restoreBackup')}</button>
+          ${signOut}
         </div>
       </footer>`;
   }
@@ -868,7 +924,7 @@
     }
     askConfirm(
       t('confirmRestore'),
-      t('confirmRestoreText', { banks: count(data.banks.length) }),
+      t(syncStatus ? 'confirmRestoreShared' : 'confirmRestoreText', { banks: count(data.banks.length) }),
       t('replaceData'),
       () => {
         state = data;
@@ -917,10 +973,30 @@
       case 'confirm-yes': {
         const run = dialogContext.action;
         dialog.close();
-        run();
-        commit();
+        // An action returns false when it isn't a change to the data.
+        if (run() !== false) commit();
         break;
       }
+      case 'sign-in':
+        if (syncApi) syncApi.signIn().catch((err) => {
+          console.error('Sign-in failed', err);
+          showToast(t('signInFailed'));
+        });
+        break;
+      case 'sign-out':
+        askConfirm(
+          t('confirmSignOut'),
+          t(syncStatus.dirty ? 'confirmSignOutUnsaved' : 'confirmSignOutText'),
+          t('signOut'),
+          () => {
+            syncApi.signOut().catch((err) => {
+              console.error('Sign-out failed', err);
+              showToast(t('signInFailed'));
+            });
+            return false;
+          }
+        );
+        break;
       case 'export': exportBackup(); break;
       case 'import': $('import-file').click(); break;
       case 'close-dialog': dialog.close(); break;
@@ -960,5 +1036,41 @@
     navigator.serviceWorker.register('sw.js').catch((err) => console.warn('Offline mode unavailable', err));
   }
 
+  function startSharing() {
+    import('./sync.js')
+      .then((module) => module.startSync({
+        config: window.FIREBASE_CONFIG,
+        getState: () => state,
+        setState: (next) => {
+          const clean = normalizeData(next);
+          if (!clean) return;
+          state = clean;
+          storeLocally();
+          render();
+        },
+        clearLocal: () => {
+          state = { version: 2, banks: [] };
+          try { localStorage.removeItem(STORAGE_KEY); } catch (err) { /* Nothing stored to clear. */ }
+          render();
+        },
+        onStatus: (next) => {
+          const wasGate = ['starting', 'signedOut', 'denied'].includes(syncStatus.state);
+          const isGate = ['starting', 'signedOut', 'denied'].includes(next.state);
+          // A denied account stays on the message until someone signs in again.
+          syncStatus = syncStatus.state === 'denied' && next.state === 'signedOut' ? { ...next, state: 'denied' } : next;
+          if (wasGate || isGate) render();
+          else if ($('sync-status')) $('sync-status').innerHTML = renderSyncBadge();
+        },
+      }))
+      .then((api) => { syncApi = api; })
+      .catch((err) => {
+        // Sign-in needs the network. Fall back to this device's own copy.
+        console.warn('Sharing unavailable', err);
+        syncStatus = { state: 'offline' };
+        render();
+      });
+  }
+
+  if (window.FIREBASE_CONFIG) startSharing();
   render();
 })();

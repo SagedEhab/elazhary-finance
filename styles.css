@@ -90,6 +90,17 @@ bdi { unicode-bidi: isolate; }
 [dir="rtl"] .brand-name { font: 800 20px/1.1 var(--font); letter-spacing: 0; }
 [dir="rtl"] .brand-sub { font: 500 12px/1 var(--font); letter-spacing: 0; }
 
+.topbar-end { display: flex; flex: none; align-items: center; gap: 10px; }
+.sync { display: inline-flex; align-items: center; gap: 6px; color: var(--hero-ink-2); font-size: 12.5px; white-space: nowrap; }
+.sync:empty { display: none; }
+.sync-dot { width: 8px; height: 8px; border-radius: 50%; background: var(--gain); }
+.sync-saving { background: var(--gold); }
+.sync-offline { background: var(--ink-2); }
+.sign-in .hero-wrap { min-height: 100dvh; }
+.sign-in-error { min-height: 0; margin: 0 0 16px; color: #ffc0b9; }
+.sign-in-loading { color: var(--hero-ink-2); }
+.backup-account { margin-top: 6px; }
+
 .lang {
   min-height: 44px;
   padding: 6px 14px;

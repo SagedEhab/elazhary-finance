@@ -1,0 +1,13 @@
+// Paste into Firebase console > Firestore Database > Rules, replacing the two
+// addresses with the Google accounts allowed to open the data. Keep the real
+// addresses out of this file, because this repository is public.
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /households/main {
+      allow read, write: if request.auth != null
+        && request.auth.token.email_verified == true
+        && request.auth.token.email in ['YOUR_EMAIL@gmail.com', 'FATHER_EMAIL@gmail.com'];
+    }
+  }
+}
