@@ -1,5 +1,9 @@
-// Paste the web app config from your Firebase project here to turn on sharing.
-// These values only identify the project, so they're safe to publish. Access is
-// controlled by the rules in firestore.rules. While this is null, the app keeps
-// its data on the device only.
-window.FIREBASE_CONFIG = null;
+// Connects the app to its Firebase project. These values only identify the
+// project, so they're safe to publish. Access is controlled by the rules set in
+// the Firebase console (see firestore.rules for the template).
+window.FIREBASE_CONFIG = {
+  apiKey: 'AIzaSyDmUflpO16Dx1pb4bsmURU0ZeW90LSK_Dg',
+  authDomain: 'elazhary-finance.firebaseapp.com',
+  projectId: 'elazhary-finance',
+  appId: '1:754178209585:web:81de42dff70f571fe82210',
+};
